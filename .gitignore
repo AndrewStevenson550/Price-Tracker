@@ -1,4 +1,4 @@
  *.venv
- requirements.txt
- price.db
- price_over_time.png
+ *requirements.txt
+ *price.db
+ *price_over_time.png
