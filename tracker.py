@@ -19,6 +19,7 @@ class Tracker():
     def webScrap(self):
         class_name = self.class_name
         element = self.element
+        print("Starting web scraping...")
 
         try:
             headers = {
