@@ -2,87 +2,93 @@ import sqlite3
 import requests
 from bs4 import BeautifulSoup
 import matplotlib.pyplot as plt
-from flask import Flask
-
-# making the flask stuff
+import os
+from flask import Flask, render_template, redirect, url_for, request
+DB_PATH = "/opt/render/project/src/data/price.db"
 app = Flask(__name__)
 
+# Ensure the static folder exists for our graphs
+if not os.path.exists('static'):
+    os.makedirs('static')
+
 class Tracker():
-    def __init__(self, url, element, class_name, timer_interval):
+    def __init__(self, url, element, class_name):
         self.url = url
         self.element = element
         self.class_name = class_name
-        self.timer_interval = timer_interval
-        self.current_price = 0
 
     def webScrap(self):
-        print("Starting web scraping...")
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
-        }
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"}
         try:
             response = requests.get(self.url, headers=headers, timeout=10)
             response.raise_for_status() 
             soup = BeautifulSoup(response.text, "html.parser")
-            information = soup.find_all(self.element, class_=self.class_name)
+            info = soup.find(self.element, class_=self.class_name)
             
-            # For simplicity, we'll take the first price found
-            if information:
-                price_text = information[0].get_text().strip()
+            if info:
+                price_text = info.get_text().strip()
+                # Cleaning data: Remove $ and commas
                 cleaned_price = price_text.replace("$", "").replace(",", "")
-                self.current_price = float(cleaned_price)
-                return self.current_price
+                return float(cleaned_price)
         except Exception as e:
             print(f"Scraping error: {e}")
             return None
 
     def addPrice(self, price):
-        # Local connection to avoid SQLite threading issues
-        with sqlite3.connect("price.db") as con:
+        with sqlite3.connect(DB_PATH) as con:
             cur = con.cursor()
             cur.execute("CREATE TABLE IF NOT EXISTS price (id INTEGER PRIMARY KEY AUTOINCREMENT, price REAL)")
             cur.execute("INSERT INTO price (price) VALUES (?)", (price,))
             con.commit()
 
-    def printPrices(self):
-        with sqlite3.connect("price.db") as con:
+    def get_data(self):
+        with sqlite3.connect(DB_PATH) as con:
             cur = con.cursor()
-            cur.execute("SELECT * FROM price")
-            rows = cur.fetchall()
-        
+            cur.execute("CREATE TABLE IF NOT EXISTS price (id INTEGER PRIMARY KEY AUTOINCREMENT, price REAL)")
+            cur.execute("SELECT * FROM price ORDER BY id DESC")
+            return cur.fetchall()
+
+    def deletePrice(self, price_id):
+        with sqlite3.connect(DB_PATH) as con:
+            cur = con.cursor()
+            cur.execute("DELETE FROM price WHERE id = ?", (price_id,))
+            con.commit()
+
+    def generate_graph(self, rows):
         if not rows:
-            return "No data found in database yet."
+            return
+        # Extract prices and reverse them so the graph goes left-to-right (oldest to newest)
+        prices = [row[1] for row in rows][::-1]
+        plt.figure(figsize=(10, 5))
+        plt.plot(prices, marker='o', color='#007bff', linewidth=2)
+        plt.title('Price Trend')
+        plt.xlabel('Days/Checks')
+        plt.ylabel('Price ($)')
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.savefig('static/price_over_time.png')
+        plt.close() # Close to free up memory
 
-        # Prepare a string to send to the web browser
-        output = "<h1>Price History</h1><ul>"
-        prices = []
-        for row in rows:
-            output += f"<li>ID: {row[0]} - Price: ${row[1]}</li>"
-            prices.append(row[1])
-        output += "</ul>"
-
-        # Create Plot
-        plt.figure()
-        plt.plot(prices, marker='o')
-        plt.savefig('price_over_time.png') # Flask likes files in a /static folder
-        
-        return output
-
-# 1. Create the instance
+# Initialize our tracker
 my_url = "https://www.pricecharting.com/console/playstation-4"
-x = Tracker(url=my_url, element="td", class_name="price numeric new_price", timer_interval=3600)
+x = Tracker(url=my_url, element="td", class_name="price numeric new_price")
 
-# 2. Define Routes
 @app.route('/')
 def index():
-    # Example: Scrap a price and add it to DB every time page is refreshed
-    # In a real app, you'd do this in a background thread
-    new_price = x.webScrap()
-    if new_price:
-        x.addPrice(new_price)
+    # Scrape new data on refresh
+    current_price = x.webScrap()
+    if current_price:
+        x.addPrice(current_price)
     
-    return x.printPrices()
+    # Get all records and generate graph
+    rows = x.get_data()
+    x.generate_graph(rows)
+    
+    return render_template("index.html", rows=rows)
 
-# 3. Run Flask at the very end
+@app.route('/delete/<int:price_id>', methods=['POST'])
+def delete(price_id):
+    x.deletePrice(price_id)
+    return redirect(url_for('index'))
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=5000)
