@@ -1,3 +1,5 @@
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 # 📈 PriceTracker Pro
 
 A full-stack web application built with **Python**, **Flask**, and **SQLite** that scrapes live product prices, stores them in a database, and visualizes trends over time with automated charts.
