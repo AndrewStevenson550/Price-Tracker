@@ -29,3 +29,10 @@ A full-stack web application built with **Python**, **Flask**, and **SQLite** th
 ```bash
 git clone [https://github.com/your-username/price-tracker.git](https://github.com/your-username/price-tracker.git)
 cd price-tracker
+
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+pip install -r requirements.txt
+
+python app.py
