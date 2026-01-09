@@ -1,4 +1,11 @@
- *.venv
- *requirements.txt
- *price.db
- *price_over_time.png
+# Ignore the virtual environment folder
+.venv/
+
+# Ignore the SQLite database (local data)
+price.db
+
+# Ignore generated images/plots
+price_over_time.png
+
+# NOTE: Removed requirements.txt 
+# You should keep requirements.txt in Git so others can install your dependencies.
